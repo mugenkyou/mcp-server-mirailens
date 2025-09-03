@@ -14,7 +14,8 @@
     "tabs",
     "activeTab",
     "storage",
-    "windows"
+    "windows",
+    "alarms"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -33,6 +34,21 @@
     "16": "icons/Fav Icon.png"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:29100"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws: wss:"
+  }
+  ,
+  "commands": {
+    "connect": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+K"
+      },
+      "description": "Connect to MCP Server"
+    },
+    "disconnect": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L"
+      },
+      "description": "Disconnect from MCP Server"
+    }
   }
 }

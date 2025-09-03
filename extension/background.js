@@ -1,36 +1,64 @@
 let ws = null;
 let activeTabId = null;
+let reconnectAttempts = 0;
+let lastErrorMessage = '';
+let serverUrl = 'ws://127.0.0.1:29100';
+
+// ---------- Chrome API helpers (callback-based, safe in MV3) ----------
+function tabsQuery(queryInfo) {
+  return new Promise((resolve) => chrome.tabs.query(queryInfo, (tabs) => resolve(tabs || [])));
+}
+function tabsUpdate(tabId, updateProps) {
+  return new Promise((resolve) => chrome.tabs.update(tabId, updateProps, (tab) => resolve(tab)));
+}
+function scriptingExecuteScript(args) {
+  return new Promise((resolve, reject) => {
+    chrome.scripting.executeScript(args, (results) => {
+      if (chrome.runtime.lastError) return reject(chrome.runtime.lastError);
+      resolve(results || []);
+    });
+  });
+}
+function windowsGetAll() {
+  return new Promise((resolve) => chrome.windows.getAll({}, (wins) => resolve(wins || [])));
+}
 
 function sendPopupStatus(status) {
+  // Use callback to absorb "Receiving end does not exist" when popup isn't open
   try {
-    chrome.runtime.sendMessage({ status });
+    chrome.runtime.sendMessage({ status }, () => {
+      // Accessing lastError prevents the uncaught promise rejection
+      // when there are no listeners (e.g., popup closed)
+      void chrome.runtime.lastError;
+    });
   } catch (_err) {
-    // ignore
+    // ignore sync errors just in case
   }
 }
 
+// Auto-reconnect disabled; manual connect only
+
 async function getActiveTabId() {
   if (!activeTabId) {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    activeTabId = tab?.id;
+    const tabs = await tabsQuery({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    activeTabId = tab && tab.id;
   }
   return activeTabId;
 }
 
 async function updateActiveTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  activeTabId = tab?.id;
+  const tabs = await tabsQuery({ active: true, currentWindow: true });
+  const tab = tabs[0];
+  activeTabId = tab && tab.id;
   return activeTabId;
 }
 
 async function exec(tabId, func, args = []) {
   try {
-    const [{ result }] = await chrome.scripting.executeScript({ 
-      target: { tabId }, 
-      func, 
-      args 
-    });
-    return result;
+    const results = await scriptingExecuteScript({ target: { tabId }, func, args });
+    const first = results && results[0];
+    return first ? first.result : null;
   } catch (error) {
     console.error('Script execution error:', error);
     return null;
@@ -73,13 +101,14 @@ function handleMCPMessage(message) {
     }
   } catch (error) {
     console.error('Error handling MCP message:', error);
+    lastErrorMessage = String(error?.message || error);
   }
 }
 
 async function handleNavigate(payload) {
   const tabId = await getActiveTabId();
   if (tabId && payload.url) {
-    await chrome.tabs.update(tabId, { url: payload.url });
+    await tabsUpdate(tabId, { url: payload.url });
     sendResult('browser_navigate', true);
   }
 }
@@ -124,15 +153,28 @@ async function handleClick(payload) {
 async function handleType(payload) {
   const tabId = await getActiveTabId();
   if (tabId && payload.selector && payload.text) {
-    await exec(tabId, (selector, text) => {
-      const element = document.querySelector(selector);
-      if (element) {
-        element.value = text;
-        element.dispatchEvent(new Event('input', { bubbles: true }));
+    await exec(tabId, (selector, text, mode) => {
+      const el = document.querySelector(selector);
+      if (!el) return false;
+      const applyValue = (node) => {
+        if (mode === 'append') node.value = (node.value || '') + text;
+        else node.value = text;
+        node.dispatchEvent(new Event('input', { bubbles: true }));
+        node.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+        applyValue(el);
+        return true;
+      }
+      if (el.isContentEditable) {
+        if (mode === 'append') el.textContent = (el.textContent || '') + text;
+        else el.textContent = text;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
         return true;
       }
       return false;
-    }, [payload.selector, payload.text]);
+    }, [payload.selector, payload.text, payload.mode || 'replace']);
     sendResult('browser_type', true);
   }
 }
@@ -157,9 +199,13 @@ async function handleSnapshot() {
   if (tabId) {
     try {
       const result = await exec(tabId, () => {
+        const dims = { width: window.innerWidth, height: window.innerHeight };
+        const scroll = { x: window.scrollX, y: window.scrollY };
         return {
           url: window.location.href,
           title: document.title,
+          viewport: dims,
+          scroll,
           html: document.documentElement.outerHTML
         };
       });
@@ -187,11 +233,12 @@ function connect() {
   }
   
   try {
-    ws = new WebSocket('ws://127.0.0.1:29100');
+    ws = new WebSocket(serverUrl);
     
     ws.onopen = () => {
       console.log('WebSocket connected to MCP server');
       sendPopupStatus('Connected');
+      reconnectAttempts = 0;
       // Send initial connection message
       ws.send(JSON.stringify({ 
         type: 'extension_connected',
@@ -207,6 +254,7 @@ function connect() {
     
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
+      lastErrorMessage = String(error?.message || 'WebSocket error');
       sendPopupStatus('WebSocket error');
     };
     
@@ -222,10 +270,13 @@ function connect() {
     return true;
   } catch (error) {
     console.error('Failed to create WebSocket:', error);
+    lastErrorMessage = String(error?.message || 'Failed to create WebSocket');
     sendPopupStatus('Failed to open WebSocket');
     return false;
   }
 }
+
+// scheduleReconnect removed
 
 // Listen for tab updates to keep track of active tab
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
@@ -242,14 +293,14 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.cmd === 'connect') {
     const ok = connect();
-    sendResponse({ success: ok });
-    return true;
+    sendResponse({ success: ok, lastError: lastErrorMessage });
+    return false; // synchronous response
   }
   
   if (msg?.cmd === 'getStatus') {
     const connected = ws && ws.readyState === WebSocket.OPEN;
-    sendResponse({ status: connected ? 'connected' : 'disconnected' });
-    return true;
+    sendResponse({ status: connected ? 'connected' : 'disconnected', lastError: lastErrorMessage, url: serverUrl });
+    return false; // synchronous response
   }
   
   if (msg?.cmd === 'disconnect') {
@@ -258,7 +309,62 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       ws = null;
     }
     sendResponse({ success: true });
-    return true;
+    return false; // synchronous response
+  }
+});
+
+// alarms reconnect removed
+
+// Keyboard commands support
+chrome.commands?.onCommand.addListener((command) => {
+  if (command === 'connect') {
+    connect();
+  } else if (command === 'disconnect') {
+    if (ws) {
+      ws.close();
+      ws = null;
+      sendPopupStatus('Disconnected');
+    }
+  }
+});
+
+// Disconnect when the last browser window is closed
+chrome.windows.onRemoved.addListener(async () => {
+  const windows = await windowsGetAll();
+  if (windows.length === 0 && ws) {
+    try { ws.close(); } catch (_) {}
+    ws = null;
+    sendPopupStatus('Disconnected');
+    // Clear connected tab marker so next session starts disconnected
+    try { chrome.storage.local.remove('connectedTabId'); } catch (_) {}
+  }
+});
+
+// Clear stale state when the extension service worker starts
+chrome.runtime.onStartup?.addListener(() => {
+  try { chrome.storage.local.remove('connectedTabId'); } catch (_) {}
+  if (ws) {
+    try { ws.close(); } catch (_) {}
+    ws = null;
+  }
+  sendPopupStatus('Disconnected');
+});
+
+chrome.runtime.onInstalled.addListener(() => {
+  try { chrome.storage.local.remove('connectedTabId'); } catch (_) {}
+  if (ws) {
+    try { ws.close(); } catch (_) {}
+    ws = null;
+  }
+  sendPopupStatus('Disconnected');
+});
+
+// Best-effort cleanup when the service worker is about to be suspended
+chrome.runtime.onSuspend?.addListener(() => {
+  try { chrome.storage.local.remove('connectedTabId'); } catch (_) {}
+  if (ws) {
+    try { ws.close(); } catch (_) {}
+    ws = null;
   }
 });
 

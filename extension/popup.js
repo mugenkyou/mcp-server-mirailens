@@ -4,16 +4,29 @@ document.addEventListener('DOMContentLoaded', () => {
   const focusTabBtn = document.getElementById('focus-tab');
   const disconnectBtn = document.getElementById('disconnect');
   const statusDiv = document.getElementById('status');
+  const lastErrorDiv = document.getElementById('last-error');
+  // URL input removed; use default from background
+
+  function setLastError(text) {
+    if (!text) {
+      lastErrorDiv.textContent = '';
+      lastErrorDiv.classList.add('hidden');
+      return;
+    }
+    lastErrorDiv.textContent = text;
+    lastErrorDiv.classList.remove('hidden');
+  }
 
   function refreshUIForActiveTab() {
     chrome.runtime.sendMessage({ cmd: 'getStatus' }, (statusResponse) => {
-      const isServerConnected = statusResponse && statusResponse.status === 'connected';
+      const isServerConnected = Boolean(statusResponse && statusResponse.status === 'connected');
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const currentTab = tabs[0];
         if (!currentTab) return;
 
         chrome.storage.local.get('connectedTabId', (data) => {
-          const connectedTabId = data.connectedTabId;
+          // Treat missing/invalid id as disconnected to avoid stale UI
+          const connectedTabId = Number.isInteger(data.connectedTabId) ? data.connectedTabId : null;
           const hasConnectedTab = Boolean(connectedTabId);
 
           if (connectedTabId && connectedTabId !== currentTab.id) {
@@ -22,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
             connectTabBtn.classList.remove('hidden');
             focusTabBtn.classList.remove('hidden');
             disconnectBtn.classList.toggle('hidden', !hasConnectedTab);
+            
             statusDiv.textContent = 'Connected on another tab';
             statusDiv.className = 'status-connected';
           } else if (connectedTabId === currentTab.id) {
@@ -30,14 +44,22 @@ document.addEventListener('DOMContentLoaded', () => {
             connectTabBtn.classList.add('hidden');
             focusTabBtn.classList.add('hidden');
             disconnectBtn.classList.toggle('hidden', !hasConnectedTab);
-            statusDiv.textContent = isServerConnected ? 'Connected on this tab' : 'Connecting...';
-            statusDiv.className = isServerConnected ? 'status-connected' : 'status-disconnected';
+            
+            if (isServerConnected) {
+              statusDiv.textContent = 'Connected on this tab';
+              statusDiv.className = 'status-connected';
+            } else {
+              // If background isn't actually connected, don't display Connecting forever
+              statusDiv.textContent = 'Disconnected';
+              statusDiv.className = 'status-disconnected';
+            }
           } else {
             // Not connected anywhere yet
             connectBtn.classList.remove('hidden');
             connectTabBtn.classList.add('hidden');
             focusTabBtn.classList.add('hidden');
             disconnectBtn.classList.add('hidden');
+            
             statusDiv.textContent = 'Disconnected';
             statusDiv.className = 'status-disconnected';
           }
@@ -45,6 +67,8 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
   }
+
+  // URL configuration removed
 
   // Initial paint
   refreshUIForActiveTab();
@@ -54,10 +78,12 @@ document.addEventListener('DOMContentLoaded', () => {
     statusDiv.textContent = 'Connecting...';
     statusDiv.className = 'status-disconnected';
 
+    setLastError('');
     chrome.runtime.sendMessage({ cmd: 'connect' }, (response) => {
       if (chrome.runtime.lastError || !response || !response.success) {
         statusDiv.textContent = 'Connection failed';
         statusDiv.className = 'status-disconnected';
+        setLastError(chrome.runtime.lastError ? chrome.runtime.lastError.message : 'Failed to connect');
         return;
       }
 
@@ -112,9 +138,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // Element picker removed
+
   // Reflect background status updates in the popup
   chrome.runtime.onMessage.addListener((message) => {
-    if (message?.status) {
+    if (message?.status === 'Connected' || message?.status === 'Disconnected' || message?.status === 'WebSocket error' || message?.status === 'Failed to open WebSocket') {
       switch (message.status) {
         case 'Connected':
           statusDiv.textContent = 'Connected to MCP Server';
@@ -129,17 +157,15 @@ document.addEventListener('DOMContentLoaded', () => {
         case 'WebSocket error':
           statusDiv.textContent = 'WebSocket connection error';
           statusDiv.className = 'status-disconnected';
+          setLastError('WebSocket connection error');
           refreshUIForActiveTab();
           break;
         case 'Failed to open WebSocket':
           statusDiv.textContent = 'Failed to connect to MCP server';
           statusDiv.className = 'status-disconnected';
+          setLastError('Failed to open WebSocket');
           refreshUIForActiveTab();
           break;
-        default:
-          statusDiv.textContent = message.status;
-          statusDiv.className = 'status-disconnected';
-          refreshUIForActiveTab();
       }
     }
   });
