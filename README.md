@@ -167,7 +167,7 @@ Add this configuration to your `MCP.json`:
   "mcpServers": {
     "mirailens": {
       "command": "npx",
-      "args": ["mirailens"],
+      "args": ["mirailens@latest"],
       "env": {}
     }
   }
