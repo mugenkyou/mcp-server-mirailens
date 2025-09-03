@@ -6,7 +6,7 @@ import {
   NavigateTool,
   PressKeyTool,
   WaitTool,
-} from "@repo/types/mcp/tool";
+} from "./schema";
 
 import { captureAriaSnapshot } from "@/utils/aria-snapshot";
 

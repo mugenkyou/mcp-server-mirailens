@@ -3,7 +3,7 @@ import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { program } from "commander";
 
-import { appConfig } from "@repo/config/app.config";
+import { appConfig } from "./config";
 
 import type { Resource } from "@/resources/resource";
 import { createServerWithTools } from "@/server";
@@ -24,7 +24,7 @@ function setupExitWatchdog(server: Server) {
 
 const commonTools: Tool[] = [common.pressKey, common.wait];
 
-const customTools: Tool[] = [custom.getConsoleLogs];
+const customTools: Tool[] = [custom.getConsoleLogs, custom.screenshot];
 
 const snapshotTools: Tool[] = [
   common.navigate(true),

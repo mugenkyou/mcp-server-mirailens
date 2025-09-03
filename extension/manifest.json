@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "MiraiLens Connector",
+  "version": "0.1.3",
+  "description": "Connects MiraiLens MCP server to the active browser tab for AI-powered web automation",
+  "author": "MiraiLens",
+  "homepage_url": "https://github.com/yourusername/mcp-server-mirailens",
+  "action": { 
+    "default_popup": "popup.html",
+    "default_title": "MiraiLens MCP Connector"
+  },
+  "permissions": [
+    "scripting",
+    "tabs",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": { 
+    "service_worker": "background.js", 
+    "type": "module" 
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

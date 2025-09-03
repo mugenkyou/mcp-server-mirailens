@@ -1,7 +1,7 @@
 import { WebSocketServer } from "ws";
 
-import { mcpConfig } from "@repo/config/mcp.config";
-import { wait } from "@repo/utils";
+const mcpConfig = { defaultWsPort: 29100 };
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 import { isPortInUse, killProcessOnPort } from "@/utils/port";
 
