@@ -2,7 +2,11 @@ let ws = null;
 let activeTabId = null;
 
 function sendPopupStatus(status) {
-  chrome.runtime.sendMessage({ status }).catch(() => {});
+  try {
+    chrome.runtime.sendMessage({ status });
+  } catch (_err) {
+    // ignore
+  }
 }
 
 async function getActiveTabId() {
