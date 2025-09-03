@@ -18,35 +18,40 @@ A Model Context Protocol (MCP) server that enables AI assistants to interact wit
 - Chrome/Chromium browser
 - MiraiLens browser extension
 
-### Install and Run (no repo clone required)
+### Installation
 
-You can use MiraiLens directly via npx or by installing the package:
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/mugenkyou/mcp-server-mirailens.git
+   cd mcp-server-mirailens
+   ```
 
-```bash
-# Option A: Run directly
-npx mirailens
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-# Option B: Install locally and run
-npm install mirailens --save-dev
-npx mirailens
-```
+3. **Build the project**
+   ```bash
+   npm run build
+   ```
 
-### Load the Browser Extension
-
-1. Open Chrome/Chromium and go to `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select the `extension/` folder from your installed package:
-   - If installed locally in a project: `./node_modules/mirailens/extension`
-   - If installed globally (not required): your global npm directory under `mirailens/extension`
+4. **Install the browser extension**
+   - Open Chrome/Chromium
+   - Navigate to `chrome://extensions/`
+   - Enable "Developer mode"
+   - Click "Load unpacked" and select the browser extension folder from your MiraiLens installation
 
 ### Usage
 
 #### As an MCP Server
 
 ```bash
-# Run with the MCP inspector
-pnpx @modelcontextprotocol/inspector npx mirailens
+# Run the MCP server
+npm run inspector
+
+# Or run directly
+node dist/index.js
 ```
 
 #### With Claude Desktop
@@ -167,7 +172,7 @@ Add this configuration to your `MCP.json`:
   "mcpServers": {
     "mirailens": {
       "command": "npx",
-      "args": ["mirailens@latest"],
+      "args": ["mirailens"],
       "env": {}
     }
   }
