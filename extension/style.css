@@ -1,0 +1,15 @@
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* space between icon and text */
+  margin: 0 0 16px 0; 
+  font-size: 18px; 
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.title-icon {
+  padding-top: 5.5px;
+  width: 16px;
+  height: 16px;
+}

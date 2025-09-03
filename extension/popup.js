@@ -1,121 +1,167 @@
-const statusEl = document.getElementById('status');
-const connectBtn = document.getElementById('connect');
+document.addEventListener('DOMContentLoaded', () => {
+  const connectBtn = document.getElementById('connect');
+  const connectTabBtn = document.getElementById('connect-tab');
+  const focusTabBtn = document.getElementById('focus-tab');
+  const disconnectBtn = document.getElementById('disconnect');
+  const statusDiv = document.getElementById('status');
 
-function setStatus(text, className = 'status-disconnected') {
-  statusEl.textContent = text;
-  statusEl.className = `status-${className}`;
-}
+  function refreshUIForActiveTab() {
+    chrome.runtime.sendMessage({ cmd: 'getStatus' }, (statusResponse) => {
+      const isServerConnected = statusResponse && statusResponse.status === 'connected';
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const currentTab = tabs[0];
+        if (!currentTab) return;
 
-function updateButtonState(connected) {
-  if (connected) {
-    connectBtn.textContent = 'Disconnect';
-    connectBtn.disabled = false;
-    setStatus('Connected to MCP Server', 'connected');
-  } else {
-    connectBtn.textContent = 'Connect to MCP Server';
-    connectBtn.disabled = false;
-    setStatus('Disconnected', 'disconnected');
-  }
-}
+        chrome.storage.local.get('connectedTabId', (data) => {
+          const connectedTabId = data.connectedTabId;
+          const hasConnectedTab = Boolean(connectedTabId);
 
-function setConnecting() {
-  connectBtn.textContent = 'Connecting...';
-  connectBtn.disabled = true;
-  setStatus('Attempting connection...', 'disconnected');
-}
-
-function setDisconnecting() {
-  connectBtn.textContent = 'Disconnecting...';
-  connectBtn.disabled = true;
-  setStatus('Disconnecting...', 'disconnected');
-}
-
-connectBtn.addEventListener('click', async () => {
-  try {
-    const isConnected = connectBtn.textContent === 'Disconnect';
-    
-    if (isConnected) {
-      // Disconnect
-      setDisconnecting();
-      chrome.runtime.sendMessage({ cmd: 'disconnect' }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.error('Disconnect error:', chrome.runtime.lastError);
-          setStatus('Disconnect failed', 'disconnected');
-          updateButtonState(true); // Keep button as disconnect
-          return;
-        }
-        
-        if (response && response.success) {
-          updateButtonState(false);
-        } else {
-          setStatus('Disconnect failed', 'disconnected');
-          updateButtonState(true); // Keep button as disconnect
-        }
+          if (connectedTabId && connectedTabId !== currentTab.id) {
+            // Connected elsewhere: offer switch + focus, show disconnect if any tab is marked connected
+            connectBtn.classList.add('hidden');
+            connectTabBtn.classList.remove('hidden');
+            focusTabBtn.classList.remove('hidden');
+            disconnectBtn.classList.toggle('hidden', !hasConnectedTab);
+            statusDiv.textContent = 'Connected on another tab';
+            statusDiv.className = 'status-connected';
+          } else if (connectedTabId === currentTab.id) {
+            // Connected here: hide connect/switch/focus; show disconnect if any tab is marked connected
+            connectBtn.classList.add('hidden');
+            connectTabBtn.classList.add('hidden');
+            focusTabBtn.classList.add('hidden');
+            disconnectBtn.classList.toggle('hidden', !hasConnectedTab);
+            statusDiv.textContent = isServerConnected ? 'Connected on this tab' : 'Connecting...';
+            statusDiv.className = isServerConnected ? 'status-connected' : 'status-disconnected';
+          } else {
+            // Not connected anywhere yet
+            connectBtn.classList.remove('hidden');
+            connectTabBtn.classList.add('hidden');
+            focusTabBtn.classList.add('hidden');
+            disconnectBtn.classList.add('hidden');
+            statusDiv.textContent = 'Disconnected';
+            statusDiv.className = 'status-disconnected';
+          }
+        });
       });
-    } else {
-      // Connect
-      setConnecting();
-      chrome.runtime.sendMessage({ cmd: 'connect' }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.error('Connection error:', chrome.runtime.lastError);
-          setStatus('Connection failed', 'disconnected');
-          updateButtonState(false);
-          return;
-        }
-        
-        if (response && response.success) {
-          // Don't update button state yet - wait for status message from background
-          setStatus('Connection initiated...', 'disconnected');
-        } else {
-          setStatus('Connection failed', 'disconnected');
-          updateButtonState(false);
-        }
+    });
+  }
+
+  // Initial paint
+  refreshUIForActiveTab();
+
+  // Connect to MCP Server (save current tab as connected)
+  connectBtn.addEventListener('click', () => {
+    statusDiv.textContent = 'Connecting...';
+    statusDiv.className = 'status-disconnected';
+
+    chrome.runtime.sendMessage({ cmd: 'connect' }, (response) => {
+      if (chrome.runtime.lastError || !response || !response.success) {
+        statusDiv.textContent = 'Connection failed';
+        statusDiv.className = 'status-disconnected';
+        return;
+      }
+
+      // On successful background connection, mark this tab as the connected one
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        chrome.storage.local.set({ connectedTabId: tabs[0].id }, () => {
+          statusDiv.textContent = 'Connected on this tab';
+          statusDiv.className = 'status-connected';
+
+          connectBtn.classList.add('hidden');
+          connectTabBtn.classList.add('hidden');
+          focusTabBtn.classList.add('hidden');
+        });
       });
-    }
-  } catch (error) {
-    console.error('Popup error:', error);
-    setStatus('Error occurred', 'disconnected');
-    updateButtonState(false);
-  }
-});
+    });
+  });
 
-// Listen for status updates from background script
-chrome.runtime.onMessage.addListener((message) => {
-  if (message?.status) {
-    switch (message.status) {
-      case 'Connected':
-        updateButtonState(true);
-        break;
-      case 'Disconnected':
-        updateButtonState(false);
-        break;
-      case 'WebSocket error':
-        setStatus('WebSocket connection error', 'disconnected');
-        updateButtonState(false);
-        break;
-      case 'Failed to open WebSocket':
-        setStatus('Failed to connect to MCP server', 'disconnected');
-        updateButtonState(false);
-        break;
-      default:
-        setStatus(message.status, 'disconnected');
-    }
-  }
-});
+  // Switch connection to current tab
+  connectTabBtn.addEventListener('click', () => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      chrome.storage.local.set({ connectedTabId: tabs[0].id }, () => {
+        statusDiv.textContent = 'Switched connection to this tab';
+        statusDiv.className = 'status-connected';
 
-// Initialize status on popup open
-chrome.runtime.sendMessage({ cmd: 'getStatus' }, (response) => {
-  if (chrome.runtime.lastError) {
-    console.error('Status check error:', chrome.runtime.lastError);
-    setStatus('Status check failed', 'disconnected');
-    return;
-  }
-  
-  if (response && response.status) {
-    updateButtonState(response.status === 'connected');
-  } else {
-    setStatus('Status unknown', 'disconnected');
-  }
+        connectBtn.classList.add('hidden');
+        connectTabBtn.classList.add('hidden');
+        focusTabBtn.classList.add('hidden');
+        disconnectBtn.classList.remove('hidden');
+      });
+    });
+  });
+
+  // Focus back to connected tab
+  focusTabBtn.addEventListener('click', () => {
+    chrome.storage.local.get('connectedTabId', (data) => {
+      if (data.connectedTabId) {
+        chrome.tabs.update(data.connectedTabId, { active: true });
+        chrome.windows.update(chrome.windows.WINDOW_ID_CURRENT, { focused: true });
+      }
+    });
+  });
+
+  // Disconnect from MCP Server
+  disconnectBtn.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ cmd: 'disconnect' }, (_response) => {
+      // Clear stored connection
+      chrome.storage.local.remove('connectedTabId', () => {
+        statusDiv.textContent = 'Disconnected';
+        statusDiv.className = 'status-disconnected';
+        refreshUIForActiveTab();
+      });
+    });
+  });
+
+  // Reflect background status updates in the popup
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.status) {
+      switch (message.status) {
+        case 'Connected':
+          statusDiv.textContent = 'Connected to MCP Server';
+          statusDiv.className = 'status-connected';
+          refreshUIForActiveTab();
+          break;
+        case 'Disconnected':
+          statusDiv.textContent = 'Disconnected';
+          statusDiv.className = 'status-disconnected';
+          refreshUIForActiveTab();
+          break;
+        case 'WebSocket error':
+          statusDiv.textContent = 'WebSocket connection error';
+          statusDiv.className = 'status-disconnected';
+          refreshUIForActiveTab();
+          break;
+        case 'Failed to open WebSocket':
+          statusDiv.textContent = 'Failed to connect to MCP server';
+          statusDiv.className = 'status-disconnected';
+          refreshUIForActiveTab();
+          break;
+        default:
+          statusDiv.textContent = message.status;
+          statusDiv.className = 'status-disconnected';
+          refreshUIForActiveTab();
+      }
+    }
+  });
+
+  // When the active tab changes while popup is open, reflect correct buttons
+  chrome.tabs.onActivated.addListener(() => {
+    refreshUIForActiveTab();
+  });
+
+  // When the active tab finishes loading, re-evaluate UI (optional but helps)
+  chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+    if (tab.active && changeInfo.status === 'complete') {
+      refreshUIForActiveTab();
+    }
+  });
+
+  // If storage value changes in background or another popup, refresh
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.connectedTabId) {
+      refreshUIForActiveTab();
+    }
+  });
 });
 
 

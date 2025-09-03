@@ -7,13 +7,10 @@ This extension connects your browser to the MiraiLens MCP server for AI-powered 
 1. **Load the Extension:**
    - Open Chrome and go to `chrome://extensions/`
    - Enable "Developer mode" (toggle in top right)
-   - Click "Load unpacked" and select the `extension/` folder from the installed package
-     - Local install: `./node_modules/mirailens/extension`
-     - Global install (optional): global npm dir under `mirailens/extension`
+   - Click "Load unpacked" and select this `extension/` folder
 
 2. **Start the MCP Server:**
-   - Run via npx: `npx mirailens`
-   - Or if installed locally: `npx mirailens`
+   - In your project directory, run: `npm start`
    - The server will start on port 29100
 
 ## Usage
