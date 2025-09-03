@@ -37,12 +37,12 @@ This project is committed to providing a welcoming and inclusive environment for
 1. Fork the repository on GitHub
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/yourusername/mcp-server-mirailens.git
+   git clone https://github.com/mugenkyou/mcp-server-mirailens.git
    cd mcp-server-mirailens
    ```
 3. Add the upstream remote:
    ```bash
-   git remote add upstream https://github.com/original-owner/mcp-server-mirailens.git
+   git remote add upstream https://github.com/mugenkyou/mcp-server-mirailens.git
    ```
 
 ## Development Setup

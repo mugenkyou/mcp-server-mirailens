@@ -20,10 +20,13 @@ export class Context {
     return !!this._ws;
   }
 
-  async sendSocketMessage(type: string, payload: any, options: { timeoutMs?: number } = { timeoutMs: 30000 }) {
+  async sendSocketMessage(type: string, payload: any, options: { timeoutMs?: number } = { timeoutMs: 60000 }) {
     const ws = this.ws;
+    if (ws.readyState !== ws.OPEN) {
+      throw new Error("WebSocket is not open. Please reconnect the Mirai Lens extension.");
+    }
     const message = { type, payload };
-    const timeoutMs = options.timeoutMs ?? 30000;
+    const timeoutMs = options.timeoutMs ?? 60000;
     return await new Promise<any>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error("Timeout waiting for response")), timeoutMs);
       const handler = (data: WebSocket.RawData) => {
