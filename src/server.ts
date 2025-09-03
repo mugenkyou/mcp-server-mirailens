@@ -38,6 +38,34 @@ export async function createServerWithTools(options: Options): Promise<Server> {
       context.ws.close();
     }
     context.ws = websocket;
+    
+    // Handle incoming messages from the extension
+    websocket.on("message", (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        console.log("Received WebSocket message:", message);
+        
+        // Handle extension connection message
+        if (message.type === "extension_connected") {
+          console.log("Extension connected:", message.data);
+          // Send acknowledgment
+          websocket.send(JSON.stringify({
+            type: "extension_acknowledged",
+            data: { status: "connected" }
+          }));
+        }
+      } catch (error) {
+        console.error("Error parsing WebSocket message:", error);
+      }
+    });
+    
+    websocket.on("close", () => {
+      console.log("WebSocket connection closed");
+    });
+    
+    websocket.on("error", (error) => {
+      console.error("WebSocket error:", error);
+    });
   });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {

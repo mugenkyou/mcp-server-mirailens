@@ -191,7 +191,7 @@ function connect() {
       // Send initial connection message
       ws.send(JSON.stringify({ 
         type: 'extension_connected',
-        data: { version: '0.1.3', capabilities: ['navigate', 'click', 'type', 'hover', 'snapshot'] }
+        data: { version: '1.0.0', capabilities: ['navigate', 'click', 'type', 'hover', 'snapshot'] }
       }));
     };
     
