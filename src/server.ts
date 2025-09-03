@@ -59,7 +59,17 @@ export async function createServerWithTools(options: Options): Promise<Server> {
       }
     });
     
+    // Keep-alive ping to detect and prevent stale connections
+    const pingInterval = setInterval(() => {
+      try {
+        if (websocket.readyState === websocket.OPEN) {
+          websocket.ping();
+        }
+      } catch {}
+    }, 15000);
+
     websocket.on("close", () => {
+      clearInterval(pingInterval);
       console.log("WebSocket connection closed");
     });
     
@@ -110,8 +120,10 @@ export async function createServerWithTools(options: Options): Promise<Server> {
     return { contents };
   });
 
+  // Preserve original close to avoid recursive self-calls
+  const originalServerClose = server.close.bind(server);
   server.close = async () => {
-    await server.close();
+    await originalServerClose();
     await wss.close();
     await context.close();
   };

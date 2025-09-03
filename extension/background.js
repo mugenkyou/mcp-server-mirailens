@@ -1,5 +1,6 @@
 let ws = null;
 let activeTabId = null;
+let reconnectAttempt = 0;
 
 function sendPopupStatus(status) {
   try {
@@ -68,6 +69,15 @@ function handleMCPMessage(message) {
       case 'browser_snapshot':
         handleSnapshot();
         break;
+      case 'browser_screenshot':
+        handleScreenshot();
+        break;
+      case 'getUrl':
+        handleGetUrl();
+        break;
+      case 'getTitle':
+        handleGetTitle();
+        break;
       default:
         console.log('Unknown message type:', type);
     }
@@ -80,6 +90,11 @@ async function handleNavigate(payload) {
   const tabId = await getActiveTabId();
   if (tabId && payload.url) {
     await chrome.tabs.update(tabId, { url: payload.url });
+    try {
+      await waitForTabComplete(tabId, 45000);
+    } catch (_e) {
+      // proceed even if timeout; page may still be interactive
+    }
     sendResult('browser_navigate', true);
   }
 }
@@ -156,19 +171,99 @@ async function handleSnapshot() {
   const tabId = await getActiveTabId();
   if (tabId) {
     try {
-      const result = await exec(tabId, () => {
-        return {
-          url: window.location.href,
-          title: document.title,
-          html: document.documentElement.outerHTML
-        };
-      });
+      const result = await exec(tabId, () => ({
+        url: window.location.href,
+        title: document.title,
+        html: document.documentElement.outerHTML
+      }));
       sendResult('browser_snapshot', result);
     } catch (error) {
       console.error('Snapshot error:', error);
       sendResult('browser_snapshot', null);
     }
   }
+}
+
+async function handleScreenshot() {
+  try {
+    // Give the tab a brief moment to settle
+    await new Promise(resolve => setTimeout(resolve, 300));
+    const dataUrl = await chrome.tabs.captureVisibleTab(undefined, { format: 'png' });
+    // Return the data URL; the server/tool declares mimeType 'image/png'
+    sendResult('browser_screenshot', dataUrl);
+  } catch (error) {
+    console.error('Screenshot error:', error);
+    sendResult('browser_screenshot', null);
+  }
+}
+
+async function handleGetUrl() {
+  const tabId = await getActiveTabId();
+  if (!tabId) {
+    sendResult('getUrl', null);
+    return;
+  }
+  try {
+    const url = await retry(async () => await exec(tabId, () => window.location.href), 3, 300);
+    sendResult('getUrl', url);
+  } catch (error) {
+    console.error('getUrl error:', error);
+    sendResult('getUrl', null);
+  }
+}
+
+async function handleGetTitle() {
+  const tabId = await getActiveTabId();
+  if (!tabId) {
+    sendResult('getTitle', null);
+    return;
+  }
+  try {
+    const title = await retry(async () => await exec(tabId, () => document.title), 3, 300);
+    sendResult('getTitle', title);
+  } catch (error) {
+    console.error('getTitle error:', error);
+    sendResult('getTitle', null);
+  }
+}
+
+function waitForTabComplete(tabId, timeoutMs = 45000) {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      chrome.tabs.onUpdated.removeListener(listener);
+      reject(new Error('Tab load timeout'));
+    }, timeoutMs);
+
+    const listener = (updatedTabId, changeInfo) => {
+      if (updatedTabId === tabId && changeInfo.status === 'complete') {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve(true);
+      }
+    };
+
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+}
+
+async function retry(fn, times = 3, delayMs = 300) {
+  let lastErr;
+  for (let i = 0; i < times; i++) {
+    try {
+      const res = await fn();
+      if (res !== undefined && res !== null) return res;
+    } catch (e) {
+      lastErr = e;
+    }
+    if (i < times - 1) await new Promise(r => setTimeout(r, delayMs));
+  }
+  if (lastErr) throw lastErr;
+  return null;
 }
 
 function sendResult(type, data) {
@@ -202,7 +297,13 @@ function connect() {
     ws.onclose = () => {
       console.log('WebSocket disconnected from MCP server');
       sendPopupStatus('Disconnected');
+      const attempt = ++reconnectAttempt;
       ws = null;
+      // Backoff up to 30s
+      const delay = Math.min(30000, 1000 * Math.pow(2, attempt));
+      setTimeout(() => {
+        if (!ws) connect();
+      }, delay);
     };
     
     ws.onerror = (error) => {
@@ -241,6 +342,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Handle messages from popup
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.cmd === 'connect') {
+    reconnectAttempt = 0;
     const ok = connect();
     sendResponse({ success: ok });
     return true;
