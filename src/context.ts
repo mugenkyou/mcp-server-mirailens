@@ -1,6 +1,11 @@
+import { createSocketMessageSender } from "@/messaging/ws/sender";
 import { WebSocket } from "ws";
 
-const noConnectionMessage = `No connection to browser extension. In order to proceed, you must first connect a tab by clicking the MiraiLens extension icon in the browser toolbar and clicking the 'Connect' button.`;
+import { mcpConfig } from "@/config/mcp.config";
+import { MessagePayload, MessageType } from "@/types/messaging/types";
+import { SocketMessageMap } from "@/types/messages/ws";
+
+const noConnectionMessage = `No connection to browser extension. In order to proceed, you must first connect a tab by clicking the Mirailens extension icon in the browser toolbar and clicking the 'Connect' button.`;
 
 export class Context {
   private _ws: WebSocket | undefined;
@@ -20,34 +25,22 @@ export class Context {
     return !!this._ws;
   }
 
-  async sendSocketMessage(type: string, payload: any, options: { timeoutMs?: number } = { timeoutMs: 60000 }) {
-    const ws = this.ws;
-    if (ws.readyState !== ws.OPEN) {
-      throw new Error("WebSocket is not open. Please reconnect the Mirai Lens extension.");
+  async sendSocketMessage<T extends MessageType<SocketMessageMap>>(
+    type: T,
+    payload: MessagePayload<SocketMessageMap, T>,
+    options: { timeoutMs?: number } = { timeoutMs: 30000 },
+  ) {
+    const { sendSocketMessage } = createSocketMessageSender<SocketMessageMap>(
+      this.ws,
+    );
+    try {
+      return await sendSocketMessage(type, payload, options);
+    } catch (e) {
+      if (e instanceof Error && e.message === mcpConfig.errors.noConnectedTab) {
+        throw new Error(noConnectionMessage);
+      }
+      throw e;
     }
-    const message = { type, payload };
-    const timeoutMs = options.timeoutMs ?? 60000;
-    return await new Promise<any>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("Timeout waiting for response")), timeoutMs);
-      const handler = (data: WebSocket.RawData) => {
-        try {
-          const json = JSON.parse(data.toString());
-          if (json && json.type === `${type}_result`) {
-            clearTimeout(timeout);
-            ws.off("message", handler);
-            resolve(json.data);
-          }
-        } catch {}
-      };
-      ws.on("message", handler);
-      ws.send(JSON.stringify(message), (err) => {
-        if (err) {
-          clearTimeout(timeout);
-          ws.off("message", handler);
-          reject(err);
-        }
-      });
-    });
   }
 
   async close() {

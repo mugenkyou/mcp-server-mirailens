@@ -38,44 +38,6 @@ export async function createServerWithTools(options: Options): Promise<Server> {
       context.ws.close();
     }
     context.ws = websocket;
-    
-    // Handle incoming messages from the extension
-    websocket.on("message", (data) => {
-      try {
-        const message = JSON.parse(data.toString());
-        console.log("Received WebSocket message:", message);
-        
-        // Handle extension connection message
-        if (message.type === "extension_connected") {
-          console.log("Extension connected:", message.data);
-          // Send acknowledgment
-          websocket.send(JSON.stringify({
-            type: "extension_acknowledged",
-            data: { status: "connected" }
-          }));
-        }
-      } catch (error) {
-        console.error("Error parsing WebSocket message:", error);
-      }
-    });
-    
-    // Keep-alive ping to detect and prevent stale connections
-    const pingInterval = setInterval(() => {
-      try {
-        if (websocket.readyState === websocket.OPEN) {
-          websocket.ping();
-        }
-      } catch {}
-    }, 15000);
-
-    websocket.on("close", () => {
-      clearInterval(pingInterval);
-      console.log("WebSocket connection closed");
-    });
-    
-    websocket.on("error", (error) => {
-      console.error("WebSocket error:", error);
-    });
   });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -120,10 +82,8 @@ export async function createServerWithTools(options: Options): Promise<Server> {
     return { contents };
   });
 
-  // Preserve original close to avoid recursive self-calls
-  const originalServerClose = server.close.bind(server);
   server.close = async () => {
-    await originalServerClose();
+    await server.close();
     await wss.close();
     await context.close();
   };

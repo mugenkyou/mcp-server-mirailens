@@ -6,7 +6,7 @@ import {
   NavigateTool,
   PressKeyTool,
   WaitTool,
-} from "./schema";
+} from "@/types/mcp/tool";
 
 import { captureAriaSnapshot } from "@/utils/aria-snapshot";
 
@@ -22,10 +22,6 @@ export const navigate: ToolFactory = (snapshot) => ({
     const { url } = NavigateTool.shape.arguments.parse(params);
     await context.sendSocketMessage("browser_navigate", { url });
     if (snapshot) {
-      // Give the page a moment to settle before taking a snapshot
-      try {
-        await context.sendSocketMessage("browser_wait", { time: 2 });
-      } catch {}
       return captureAriaSnapshot(context);
     }
     return {

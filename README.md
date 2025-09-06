@@ -1,172 +1,47 @@
 # MiraiLens MCP Server
 
-A Model Context Protocol (MCP) server that enables AI assistants to interact with web browsers through browser automation. MiraiLens provides a bridge between AI models and web browsers, allowing for sophisticated web automation tasks.
+An implementation of the Model Context Protocol (MCP) that enables AI assistants to control and observe web browsers through MiraiLens. It exposes high‑level browser automation tools (navigate, click, type, screenshot, accessibility snapshot, and more) over MCP for seamless integration with AI clients.
 
-## Features
+## Key Features
 
-- **Browser Automation**: Navigate, click, type, and interact with web pages
-- **Accessibility Support**: Capture accessibility snapshots for better understanding of page structure
-- **Console Integration**: Access browser console logs and debugging information
-- **Screenshot Capabilities**: Capture visual representations of web pages
-- **MCP Compliance**: Full Model Context Protocol implementation for seamless AI integration
+- **Full MCP server**: Standards‑compliant, easy to integrate with MCP‑capable clients
+- **Browser automation**: Navigate, click, type, select, and interact reliably
+- **Observability**: Accessibility tree snapshots, console logs, and screenshots
+- **Simple setup**: Run via `npx mirailens` or as a local Node process
 
-## Quick Start
+## Requirements
 
-### Prerequisites
+- Node.js 18+
+- Chrome/Chromium
+- MiraiLens browser extension (for in‑browser automation)
 
-- Node.js 18+ 
-- Chrome/Chromium browser
-- MiraiLens browser extension
+## Install and Run
 
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/mugenkyou/mcp-server-mirailens.git
-   cd mcp-server-mirailens
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Build the project**
-   ```bash
-   npm run build
-   ```
-
-4. **Install the browser extension**
-   - Open Chrome/Chromium
-   - Navigate to `chrome://extensions/`
-   - Enable "Developer mode"
-   - Click "Load unpacked" and select the browser extension folder from your MiraiLens installation
-
-### Usage
-
-#### As an MCP Server
-
+### Option A: Run via npx (recommended)
 ```bash
-# Run the MCP server
-npm run inspector
+npx mirailens@latest
+```
 
-# Or run directly
+Then point your MCP client to the spawned process (see "Configure for Cursor").
+
+### Option B: Local clone
+```bash
+git clone https://github.com/mugenkyou/mcp-server-mirailens.git
+cd mcp-server-mirailens
+npm ci
+npm run build
 node dist/index.js
 ```
 
-#### With Claude Desktop
+## Configure for Cursor
 
-1. Add the server to your Claude Desktop configuration:
-   ```json
-   {
-     "mcpServers": {
-       "mirailens": {
-         "command": "node",
-         "args": ["/path/to/mirailens/dist/index.js"],
-         "env": {}
-       }
-     }
-   }
-   ```
+Create or edit your `mcp.json` in Cursor’s configuration directory:
 
-2. Restart Claude Desktop
+- Windows: `%APPDATA%/Cursor/User/globalStorage/cursor.mcp/mcp.json`
+- macOS: `~/Library/Application Support/Cursor/User/globalStorage/cursor.mcp/mcp.json`
+- Linux: `~/.config/Cursor/User/globalStorage/cursor.mcp/mcp.json`
 
-#### Available Tools
-
-- **Navigation**: `navigate`, `goBack`, `goForward`
-- **Interaction**: `click`, `hover`, `type`, `selectOption`
-- **Information**: `snapshot`, `getConsoleLogs`, `screenshot`
-- **Utilities**: `wait`, `pressKey`
-
-## Development
-
-### Project Structure
-
-```
-src/
-├── config.ts          # Application configuration
-├── context.ts         # MCP context management
-├── index.ts           # Main entry point
-├── server.ts          # MCP server implementation
-├── tools/             # Tool implementations
-│   ├── common.ts      # Common browser tools
-│   ├── custom.ts      # Custom browser tools
-│   ├── snapshot.ts    # Accessibility snapshot tools
-│   └── tool.ts        # Tool type definitions
-├── resources/         # Resource definitions
-├── utils/             # Utility functions
-└── ws.ts              # WebSocket handling
-```
-
-### Building
-
-```bash
-# Development build with watch mode
-npm run watch
-
-# Production build
-npm run build
-
-# Type checking
-npm run typecheck
-```
-
-### Testing
-
-```bash
-# Run the MCP inspector for testing
-npm run inspector
-```
-
-## Browser Extension
-
-The MiraiLens browser extension provides the connection between the MCP server and the active browser tab. It handles:
-
-- Tab communication
-- Script injection
-- Permission management
-- Background service worker
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/mugenkyou/mcp-server-mirailens/issues)
-- **Documentation**: [MCP Specification](https://modelcontextprotocol.io/)
-- **Community**: [Discord](https://discord.gg/mirailens)
-
-## Acknowledgments
-
-- [Model Context Protocol](https://modelcontextprotocol.io/) for the MCP specification
-- [Claude Desktop](https://claude.ai/) for MCP client implementation
-- The open source community for inspiration and contributions
-
-## Cursor Guide
-
-To use MiraiLens with Cursor, you need to configure your MCP.json file. Here's how to set it up:
-
-### 1. Create MCP.json Configuration
-
-Create or edit your `MCP.json` file in your Cursor configuration directory:
-
-**Windows**: `%APPDATA%\Cursor\User\globalStorage\cursor.mcp\mcp.json`
-**macOS**: `~/Library/Application Support/Cursor/User/globalStorage/cursor.mcp/mcp.json`
-**Linux**: `~/.config/Cursor/User/globalStorage/cursor.mcp/mcp.json`
-
-### 2. Add MiraiLens Server Configuration
-
-Add this configuration to your `MCP.json`:
-
+### Use npx
 ```json
 {
   "mcpServers": {
@@ -179,40 +54,95 @@ Add this configuration to your `MCP.json`:
 }
 ```
 
-### 3. Alternative: Direct Path Configuration
-
-If you prefer to use a local installation:
-
+### Use local build
 ```json
 {
   "mcpServers": {
     "mirailens": {
       "command": "node",
-      "args": ["/path/to/your/mirailens/dist/index.js"],
+      "args": ["/absolute/path/to/mcp-server-mirailens/dist/index.js"],
       "env": {}
     }
   }
 }
 ```
 
-### 4. Restart Cursor
+Restart Cursor after saving. In the MCP tools list, you should see MiraiLens available.
 
-After saving the configuration, restart Cursor for the changes to take effect.
+## Available Tools
 
-### 5. Verify Installation
+- **Navigation**: `navigate`, `goBack`, `goForward`
+- **Interaction**: `click`, `hover`, `type`, `selectOption`, `pressKey`, `wait`
+- **Inspection**: `snapshot` (ARIA/accessibility), `getConsoleLogs`, `screenshot`
 
-Once Cursor restarts, you should see MiraiLens tools available in your AI assistant. You can test by asking the AI to navigate to a website or take a screenshot.
+### Tool identifiers (for MCP clients)
 
-### Troubleshooting
+```text
+mcp_mirailens_navigate
+mcp_mirailens_go_back
+mcp_mirailens_go_forward
+mcp_mirailens_snapshot
+mcp_mirailens_hover
+mcp_mirailens_type
+mcp_mirailens_select_option
+mcp_mirailens_press_key
+```
 
-- **Command not found**: Make sure you have Node.js installed and the package is built
-- **Connection failed**: Ensure the MiraiLens browser extension is installed and active
-- **Permission denied**: Check that the path to your MiraiLens installation is correct
+## Browser Extension
 
-### Available Commands
+The MiraiLens extension brokers communication with the active tab and handles:
 
-With this configuration, you'll have access to all MiraiLens tools:
-- Browser navigation and interaction
-- Screenshot and accessibility features
-- Console log access
-- Web automation capabilities
+- Message passing between the page and the MCP server
+- Script injection and permissions
+- Background service worker lifecycle
+
+Load the unpacked extension:
+
+1. Open Chrome/Chromium → `chrome://extensions/`
+2. Enable Developer Mode
+3. Click "Load unpacked" and select the `extension/` directory in this repository
+
+## Development
+
+```bash
+# Type check
+npm run typecheck
+
+# Dev build (watch)
+npm run watch
+
+# Production build
+npm run build
+
+# MCP Inspector (manual testing)
+npm run inspector
+```
+
+### Project Layout
+
+```
+src/
+├── config.ts          # Configuration helpers
+├── context.ts         # MCP context wiring
+├── index.ts           # CLI entry (bin)
+├── server.ts          # Server bootstrap
+├── tools/             # Tool implementations
+│   ├── common.ts      # Core browser actions
+│   ├── custom.ts      # Custom actions
+│   ├── snapshot.ts    # Accessibility snapshot
+│   └── tool.ts        # Tool type helpers
+├── resources/         # Resource definitions
+├── utils/             # Logging, ports, ARIA helpers
+└── ws.ts              # WebSocket transport
+```
+
+
+
+## Support
+
+- Issues: https://github.com/mugenkyou/mcp-server-mirailens/issues
+- MCP specification: https://modelcontextprotocol.io/
+
+## License
+
+MIT © MiraiLens
