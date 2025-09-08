@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/mugenkyou-mcp-server-mirailens-badge.png)](https://mseep.ai/app/mugenkyou-mcp-server-mirailens)
+
 # MiraiLens MCP Server
 
 An implementation of the Model Context Protocol (MCP) that enables AI assistants to control and observe web browsers through MiraiLens. It exposes high‑level browser automation tools (navigate, click, type, screenshot, accessibility snapshot, and more) over MCP for seamless integration with AI clients.
